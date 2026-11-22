@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- 強制防快取 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <title>冰圓屋點餐系統</title>
+    <!-- 引入核心套件 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- 引入最穩定的 Firebase 傳統模組 -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; background-color: #FDFBF7; color: #5C4B41; }
+        .theme-bg { background-color: #A68A7A; }
+        .btn-primary { background-color: #C16E59; color: white; }
+        
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .safe-padding-bottom { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+        
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        
+        const firebaseConfig = {
+          apiKey: "AIzaSyB8PfZcDEPZ-gbQm0hzEz70cm38NiSTLz4",
+          authDomain: "bingyuanwu.firebaseapp.com",
+          projectId: "bingyuanwu",
+          storageBucket: "bingyuanwu.firebasestorage.app",
+          messagingSenderId: "438908211523",
+          appId: "1:438908211523:web:4ff47b7586b70083dd1ff6",
+          measurementId: "G-Q6SGZX03PD"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        const db = firebase.firestore();
+
+        // 統一店鋪 ID，建立共用資料庫通道
+        const STORE_ID = "bingyuanwu_main"; 
+        const storeRef = db.collection("stores").doc(STORE_ID);
+
+        const DEFAULT_MENU = [
+            { id: 'c1', name: '剉冰奶蓋套餐', items: [
+                { id: 'i1', name: '剉冰奶蓋套餐 A', price: 60, defaultToppings: ['紅豆','綠豆','薯圓','綠茶凍','黑糖粉粿','奶酪'] },
+                { id: 'i2', name: '剉冰奶蓋套餐 B', price: 60, defaultToppings: ['薯圓','芋圓','芋泥','嫩仙草','黑糖粉粿','奶酪'] },
+                { id: 'i3', name: '剉冰奶蓋套餐 C', price: 60, defaultToppings: ['綠豆','芋圓','芋泥','珍珠','黑糖粉粿','奶酪'] },
+                { id: 'i4', name: '剉冰奶蓋套餐 D', price: 60, defaultToppings: ['愛玉','薯圓','芋泥','紅豆','黑糖粉粿','奶酪'] }
+            ]},
+            { id: 'c2', name: '剉冰紅茶奶蓋套餐', items: [
+                { id: 'i5', name: '紅茶奶蓋', price: 60, defaultToppings: ['綠豆','芋泥','芋圓','珍珠','嫩仙草','奶酪'] }
+            ]},
+            { id: 'c3', name: '巧克力奶酪剉冰套餐', items: [
+                { id: 'i6', name: '巧克力奶酪剉冰套餐 A', price: 60, defaultToppings: ['紅豆','綠豆','芋泥','薯圓','黑糖粉粿','奶酪'] },
+                { id: 'i7', name: '巧克力奶酪剉冰套餐 B', price: 60, defaultToppings: ['紅豆','綠豆','芋泥','薯圓','黑糖粉粿','奶酪'] }
+            ]},
+            { id: 'c4', name: '剉冰撞奶茶套餐', items: [
+                { id: 'i8', name: '剉冰撞奶茶套餐 A', price: 60, defaultToppings: ['芋泥','芋圓','嫩仙草','黑糖粉粿','奶酪'] },
+                { id: 'i9', name: '剉冰撞奶茶套餐 B', price: 60, defaultToppings: ['薯圓','芋圓','珍珠','嫩仙草','奶酪'] },
+                { id: 'i10', name: '剉冰撞奶茶套餐 C', price: 60, defaultToppings: ['紅豆','芋泥','杏仁凍','珍珠','奶酪'] }
+            ]},
+            { id: 'c5', name: '其他剉冰', items: [
+                { id: 'i11', name: '紅豆牛奶冰', price: 50, defaultToppings: ['紅豆'] },
+                { id: 'i12', name: '紅豆奶蓋冰', price: 50, defaultToppings: ['紅豆','奶蓋'] },
+                { id: 'i13', name: '綠豆牛奶冰', price: 50, defaultToppings: ['綠豆'] },
+                { id: 'i14', name: '綠豆奶蓋冰', price: 50, defaultToppings: ['綠豆','奶蓋'] },
+                { id: 'i15', name: '清冰', price: 25, defaultToppings: [] }
+            ]},
+            { id: 'c6', name: '鹽滷豆花', items: [
+                { id: 'i16', name: '豆花 A.芋圓,紅豆', price: 40, defaultToppings: ['芋圓','紅豆'] },
+                { id: 'i17', name: '豆花 B.薯圓,紅豆', price: 40, defaultToppings: ['薯圓','紅豆'] },
+                { id: 'i18', name: '豆花 C.綠豆,珍珠', price: 40, defaultToppings: ['綠豆','珍珠'] },
+                { id: 'i19', name: '純豆花', price: 30, defaultToppings: [] }
+            ]},
+            { id: 'c7', name: '嫩仙草套餐', items: [
+                { id: 'i20', name: '嫩仙草 A.芋圓,薯圓', price: 45, defaultToppings: ['芋圓','薯圓'] },
+                { id: 'i21', name: '嫩仙草 B.芋圓,珍珠', price: 45, defaultToppings: ['芋圓','珍珠'] },
+                { id: 'i22', name: '嫩仙草 C.薯圓,珍珠', price: 45, defaultToppings: ['薯圓','珍珠'] },
+                { id: 'i23', name: '純嫩仙草', price: 35, defaultToppings: [] }
+            ]},
+            { id: 'c8', name: '熱壓土司', items: [
+                { id: 'i24', name: '雙圓起司', price: 60, defaultToppings: [] },
+                { id: 'i25', name: '珍珠起司', price: 60, defaultToppings: [] },
+                { id: 'i26', name: '紅豆+粉粿起司', price: 60, defaultToppings: [] },
+                { id: 'i27', name: '芋泥起司', price: 60, defaultToppings: [] },
+                { id: 'i28', name: '鮪魚玉米起司', price: 60, defaultToppings: [] }
+            ]},
+            { id: 'c9', name: '飲料', items: [
+                { id: 'i29', name: '奶茶', price: 40, defaultToppings: [] },
+                { id: 'i30', name: '鮮奶茶', price: 60, defaultToppings: [] },
+                { id: 'i31', name: '珍珠奶茶', price: 50, defaultToppings: [] },
+                { id: 'i32', name: '珍珠鮮奶茶', price: 60, defaultToppings: [] },
+                { id: 'i33', name: '嫩仙草奶茶', price: 50, defaultToppings: [] },
+                { id: 'i34', name: '嫩仙草鮮奶茶', price: 60, defaultToppings: [] },
+                { id: 'i35', name: '奶蓋綠茶', price: 45, defaultToppings: [] },
+                { id: 'i36', name: '綠茶', price: 30, defaultToppings: [] },
+                { id: 'i37', name: '手炒黑糖愛玉冰', price: 60, defaultToppings: [] }
+            ]},
+            { id: 'c10', name: '冬季限定 - 熱紅豆湯', items: [
+                { id: 'i38', name: '綜合紅豆湯', price: 50, defaultToppings: ['芋圓','薯圓','珍珠','黑糖粉粿'] },
+                { id: 'i39', name: '雙圓紅豆湯', price: 40, defaultToppings: ['芋圓','薯圓'] },
+                { id: 'i40', name: '原味紅豆湯', price: 30, defaultToppings: [] }
+            ]},
+            { id: 'c11', name: '冬季限定 - 燒仙草套餐', items: [
+                { id: 'i41', name: '燒仙草 A.芋圓,紅豆,黑粉', price: 45, defaultToppings: ['芋圓','紅豆','黑糖粉粿'] },
+                { id: 'i42', name: '燒仙草 B.珍珠,紅豆,黑粉', price: 45, defaultToppings: ['珍珠','紅豆','黑糖粉粿'] },
+                { id: 'i43', name: '燒仙草 C.綠豆,紅豆,薯圓', price: 45, defaultToppings: ['綠豆','紅豆','薯圓'] },
+                { id: 'i44', name: '純燒仙草', price: 30, defaultToppings: [] }
+            ]}
+        ];
+
+        const PREMIUM_TOPPINGS = ['芋泥', '奶酪'];
+        const REGULAR_TOPPINGS = ['紅豆', '綠豆', '芋圓', '薯圓', '珍珠', '愛玉', '嫩仙草', '綠茶凍', '杏仁凍', '黑糖粉粿', '荔枝寒天', '可可寒天', '硬花生'];
+        
+        const CUSTOM_BASES = [
+            { id: 'b1', name: '剉冰', minItems: 5, basePrice: 50 },
+            { id: 'b2', name: '嫩仙草', minItems: 3, basePrice: 45 },
+            { id: 'b3', name: '豆花', minItems: 3, basePrice: 40 }
+        ];
+
+        const FLAVOR_OPTIONS = [
+            { label: '黑糖水', price: 0 },
+            { label: '加奶蓋', price: 5 },
+            { label: '加煉乳', price: 5 },
+            { label: '奶蓋+煉乳', price: 10 }
+        ];
+
+        const App = () => {
+            const [cloudStatus, setCloudStatus] = useState('connecting');
+            const [activeTab, setActiveTab] = useState('menu'); 
+            const [activeCategory, setActiveCategory] = useState('c1');
+            
+            const [menuData, setMenuData] = useState(DEFAULT_MENU);
+            const [orders, setOrders] = useState([]);
+            const [inventoryLimits, setInventoryLimits] = useState({});
+            
+            const [cart, setCart] = useState([]);
+            const [orderType, setOrderType] = useState('內用');
+            const [pagerNum, setPagerNum] = useState('');
+            
+            const [customBaseModal, setCustomBaseModal] = useState(null);
+            const [customSelections, setCustomSelections] = useState([]);
+            const [customFlavor, setCustomFlavor] = useState(FLAVOR_OPTIONS[0]);
+
+            const [swapModal, setSwapModal] = useState(null);
+            const [swapSelections, setSwapSelections] = useState([]);
+
+            const [toast, setToast] = useState(null);
+            const [warningToast, setWarningToast] = useState(null);
+            const [confirmDialog, setConfirmDialog] = useState(null);
+
+            useEffect(() => {
+                const handleOnline = () => setCloudStatus('connected');
+                const handleOffline = () => setCloudStatus('offline');
+                window.addEventListener('online', handleOnline);
+                window.addEventListener('offline', handleOffline);
+                
+                // 即時監聽訂單
+                const unsubOrders = storeRef.collection("orders")
+                    .orderBy("createdAt", "asc")
+                    .onSnapshot(snapshot => {
+                        setCloudStatus('connected');
+                        const fetched = [];
+                        snapshot.forEach(doc => {
+                            const data = doc.data();
+                            const timestamp = data.createdAt ? data.createdAt.toDate().getTime() : Date.now();
+                            fetched.push({ id: doc.id, ...data, timestamp });
+                        });
+                        setOrders(fetched);
+                    }, err => {
+                        console.error("雲端讀取遭拒:", err);
+                        setCloudStatus('offline');
+                    });
+                
+                // 即時監聽設定檔
+                const unsubConfig = storeRef.collection("config").doc("settings")
+                    .onSnapshot(docSnap => {
+                        if (docSnap.exists) {
+                            const data = docSnap.data();
+                            if (data.menu) setMenuData(data.menu);
+                            if (data.limits) setInventoryLimits(data.limits);
+                        } else {
+                            storeRef.collection("config").doc("settings").set({ menu: DEFAULT_MENU, limits: {} }).catch(()=>{});
+                        }
+                    }, err => console.error("設定檔同步失敗", err));
+
+                return () => { 
+                    unsubOrders(); 
+                    unsubConfig();
+                    window.removeEventListener('online', handleOnline);
+                    window.removeEventListener('offline', handleOffline);
+                };
+            }, []);
+
+            useEffect(() => { if(window.lucide) window.lucide.createIcons(); });
+
+            const showToast = (msg, type = 'success') => {
+                setToast({ msg, type });
+                setTimeout(() => setToast(null), 1500);
+            };
+
+            const showWarning = (msg) => {
+                setWarningToast(msg);
+                setTimeout(() => setWarningToast(null), 4000);
+            };
+
+            const getTodayUsage = () => {
+                const today = new Date().toDateString();
+                const clearTime = inventoryLimits._clearedAt || 0; 
+                
+                const todayOrders = orders.filter(o => 
+                    new Date(o.timestamp).toDateString() === today && 
+                    o.status !== 'deleted' && 
+                    o.timestamp >= clearTime 
+                );
+                const usage = {};
+                todayOrders.forEach(order => {
+                    order.items.forEach(item => {
+                        (item.toppings || []).forEach(t => { usage[t] = (usage[t] || 0) + 1; });
+                    });
+                });
+                return usage;
+            };
+
+            const checkInventoryWarning = () => {
+                const usage = getTodayUsage();
+                const warnings = [];
+                Object.keys(inventoryLimits).forEach(topping => {
+                    const limit = parseInt(inventoryLimits[topping]);
+                    if (!isNaN(limit) && limit > 0) {
+                        const remain = limit - (usage[topping] || 0);
+                        if (remain <= 5 && remain >= 0) { warnings.push(`${topping} 僅剩 ${remain} 份`); }
+                    }
+                });
+                if (warnings.length > 0) showWarning(`⚠️ 備料提醒：\n${warnings.join('\n')}`);
+            };
+
+            // 修正：強制將 basePrice 轉為數字，避免字串相加變成 5500
+            const calculatePrice = (basePrice, minItems, selections) => {
+                const base = Number(basePrice) || 0;
+                let extraCount = Math.max(0, selections.length - minItems);
+                let premiumCount = selections.filter(t => t === '芋泥' || t === '奶酪').length;
+                let chargePremium = Math.min(extraCount, premiumCount);
+                let chargeNormal = Math.max(0, extraCount - chargePremium);
+                return base + (chargePremium * 10) + (chargeNormal * 5);
+            };
+
+            const handleAddCustomToCart = () => {
+                if (customSelections.length < customBaseModal.minItems) {
+                    return alert(`最少需選 ${customBaseModal.minItems} 樣配料！`);
+                }
+                setCart([...cart, {
+                    id: Date.now().toString(),
+                    name: `自選${customBaseModal.name} (${customFlavor.label})`,
+                    price: calculatePrice(customBaseModal.basePrice, customBaseModal.minItems, customSelections) + (Number(customFlavor.price) || 0),
+                    toppings: customSelections,
+                    flavor: customFlavor.label
+                }]);
+                setCustomBaseModal(null);
+                setCustomSelections([]);
+                setCustomFlavor(FLAVOR_OPTIONS[0]);
+                showToast("已加入待送單");
+            };
+
+            const handleAddSwapToCart = () => {
+                setCart([...cart, {
+                    id: Date.now().toString(),
+                    name: swapModal.name,
+                    price: calculatePrice(swapModal.price, (swapModal.defaultToppings || []).length, swapSelections),
+                    toppings: swapSelections
+                }]);
+                setSwapModal(null);
+                setSwapSelections([]);
+                showToast("已加入待送單");
+            };
+
+            const submitOrder = async () => {
+                if (cart.length === 0) return alert("尚未加入任何餐點！");
+                if (!pagerNum.trim()) return alert("請輸入號碼機號碼！");
+
+                const currentPagerNum = pagerNum.trim();
+                const orderData = {
+                    pagerNum: currentPagerNum,
+                    orderType, 
+                    items: cart, 
+                    total: cart.reduce((sum, item) => sum + (Number(item.price) || 0), 0),
+                    status: 'pending', 
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                setCart([]);
+                setPagerNum('');
+                
+                if (window.innerWidth < 1024) {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                showToast(`✅ 訂單送出！號碼機：${currentPagerNum}`);
+
+                try {
+                    await storeRef.collection("orders").add(orderData);
+                    setTimeout(checkInventoryWarning, 500);
+                } catch (err) {
+                    console.error("送出失敗", err);
+                    showToast("送出失敗，請確認 Firebase 規則已設定", "error");
+                }
+            };
+
+            const updateOrderStatus = async (orderId, newStatus) => {
+                try {
+                    await storeRef.collection("orders").doc(orderId).set({ status: newStatus }, { merge: true });
+                } catch (err) {
+                    console.error("狀態同步失敗", err);
+                }
+            };
+
+            const handleDeleteOrder = (order) => {
+                setConfirmDialog({
+                    title: '確認刪除',
+                    message: `確定要刪除號碼機 ${order.pagerNum} 嗎？今日統計將同步扣除。`,
+                    onConfirm: () => {
+                        setConfirmDialog(null);
+                        updateOrderStatus(order.id, 'deleted').then(() => {
+                            showToast("已刪除並扣除統計", "error");
+                        });
+                    }
+                });
+            };
+
+            // 新增：歷史紀錄一鍵清除所有待製作訂單
+            const handleClearAllPending = () => {
+                const pendingOrders = orders.filter(o => o.status === 'pending');
+                if (pendingOrders.length === 0) return;
+                setConfirmDialog({
+                    title: '一鍵清除待製作訂單',
+                    message: `確定要將目前 ${pendingOrders.length} 筆待製作訂單全部清除嗎？\n（會標記為完成，不會扣除今日數量統計）`,
+                    onConfirm: () => {
+                        setConfirmDialog(null);
+                        const batch = db.batch();
+                        pendingOrders.forEach(o => {
+                            batch.set(storeRef.collection("orders").doc(o.id), { status: 'completed' }, { merge: true });
+                        });
+                        batch.commit()
+                            .then(() => showToast("已一鍵清除所有待製作訂單"))
+                            .catch(err => console.error("一鍵清除失敗", err));
+                    }
+                });
+            };
+
+            const handleClearStats = () => {
+                setConfirmDialog({
+                    title: '清除今日統計',
+                    message: '確定要將今日的數量統計歸零嗎？\n這不會刪除歷史訂單，只會重新計算今日備料數量。',
+                    onConfirm: () => {
+                        setConfirmDialog(null);
+                        saveSettings('limits', { ...inventoryLimits, _clearedAt: Date.now() }).then(() => {
+                            showToast("統計已歸零");
+                        });
+                    }
+                });
+            };
+
+            const saveSettings = async (type, data) => {
+                if (type === 'menu') setMenuData(data);
+                if (type === 'limits') setInventoryLimits(data);
+                
+                try {
+                    await storeRef.collection("config").doc("settings").set({ [type]: data }, { merge: true });
+                } catch (err) {
+                    console.error("設定存檔失敗", err);
+                }
+            };
+
+            const scrollToCategory = (id) => {
+                setActiveCategory(id);
+                const el = document.getElementById(`cat-${id}`);
+                if (el) {
+                    const headerOffset = window.innerWidth >= 1024 ? 100 : 210;
+                    const offsetPosition = el.getBoundingClientRect().top + window.pageYOffset - headerOffset;
+                    window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+                }
+            };
+
+            const scrollToCheckout = () => {
+                const el = document.getElementById('order-details');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            };
+
+            const currentUsage = getTodayUsage();
+            const uncompletedCount = orders.filter(o => o.status === 'pending').length;
+            const cartTotal = cart.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+
+            return (
+                <div className="min-h-screen flex flex-col bg-[#FDFBF7] relative">
+                    {toast && (
+                        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300">
+                            <div className={`px-6 py-3 rounded-full text-white font-bold shadow-lg flex items-center gap-2 ${toast.type === 'error' ? 'bg-red-500' : 'bg-[#5C4B41]'}`}>
+                                {toast.msg}
+                            </div>
+                        </div>
+                    )}
+                    {warningToast && (
+                        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 w-[90%] max-w-sm">
+                            <div className="px-6 py-4 rounded-xl bg-yellow-100 text-yellow-800 border-2 border-yellow-400 font-bold shadow-lg text-center">
+                                {warningToast}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {confirmDialog && (
+                        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
+                                <h3 className="text-xl font-black text-[#5C4B41] mb-2">{confirmDialog.title}</h3>
+                                <p className="text-gray-600 font-bold mb-6 whitespace-pre-line">{confirmDialog.message}</p>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setConfirmDialog(null)} className="flex-1 py-3 rounded-xl font-bold bg-gray-100 text-gray-600">取消</button>
+                                    <button onClick={confirmDialog.onConfirm} className="flex-1 py-3 rounded-xl font-bold bg-red-500 text-white">確定執行</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Header：手機直式維持原樣，平板橫式 (lg:) 自動變成單排導覽列 */}
+                    <header className="sticky top-0 bg-[#FDFBF7] z-40 px-4 pt-4 pb-3 lg:py-3 shadow-[0_4px_10px_-4px_rgba(0,0,0,0.05)] border-b border-[#E6D5C9]">
+                        <div className="max-w-2xl lg:max-w-7xl mx-auto lg:flex lg:justify-between lg:items-center lg:gap-6">
+                            <div className="flex justify-between items-center mb-5 lg:mb-0">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-[42px] h-[42px] rounded-full theme-bg text-white flex items-center justify-center font-black text-xl shadow-sm">冰</div>
+                                    <div>
+                                        <h1 className="text-xl font-black text-[#5C4B41] tracking-wide leading-tight flex items-center">
+                                            冰圓屋 
+                                            <span className={`inline-block w-2 h-2 rounded-full mx-1.5 ${cloudStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'} align-middle`}></span>
+                                            <span className="text-[10px] text-[#A68A7A] bg-gray-100 px-1.5 py-0.5 rounded-md">v12正式版</span>
+                                        </h1>
+                                        <p className="text-[11px] text-[#A68A7A] font-bold tracking-wider">手作甜品 ‧ 點餐與備料系統</p>
+                                    </div>
+                                </div>
+                                <div className="lg:hidden bg-[#f7f0eb] border border-[#E6D5C9] text-[#5C4B41] px-3.5 py-1.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-sm">
+                                    <i data-lucide="shopping-cart" className="w-4 h-4 text-[#A68A7A]"></i> 待送單 
+                                    <span className="bg-[#A68A7A] text-white px-2 py-0.5 rounded-full text-[11px]">{cart.length}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex bg-[#f7f0eb] p-1.5 rounded-2xl gap-1 border border-[#E6D5C9] lg:w-[460px]">
+                                {['menu','history','stats','edit'].map((tab, idx) => {
+                                    const labels = ['點餐作業','歷史紀錄','數量統計','菜單編輯'];
+                                    const icons = ['clipboard-list','clock','bar-chart-2','edit'];
+                                    return (
+                                        <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-2.5 lg:py-2 rounded-xl text-xs font-black flex flex-col lg:flex-row justify-center items-center gap-1.5 transition-all relative ${activeTab === tab ? 'bg-[#A68A7A] text-white shadow-md' : 'text-[#A68A7A] hover:bg-white/50'}`}>
+                                            <i data-lucide={icons[idx]} className="w-5 h-5 lg:w-4 lg:h-4"></i> {labels[idx]}
+                                            {(tab === 'history' && uncompletedCount > 0) && <span className="absolute top-1 right-2 lg:static w-4 h-4 bg-[#C16E59] text-white text-[10px] flex items-center justify-center rounded-full border-2 lg:border-0 border-white">{uncompletedCount}</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        
+                        {/* 手機版分類橫向滑動列 */}
+                        {activeTab === 'menu' && (
+                            <div className="flex lg:hidden overflow-x-auto gap-2 mt-4 pb-2 hide-scrollbar snap-x max-w-2xl mx-auto">
+                                <button onClick={() => scrollToCategory('custom')} className="shrink-0 snap-start bg-white border border-[#E6D5C9] text-[#5C4B41] px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-1">✨ 自選配料</button>
+                                {menuData.map(cat => (
+                                    <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className={`shrink-0 snap-start px-4 py-1.5 rounded-full text-sm font-bold transition-colors ${activeCategory === cat.id ? 'bg-[#5C4B41] text-white' : 'bg-white border border-[#E6D5C9] text-[#5C4B41]'}`}>
+                                        {cat.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </header>
+
+                    <main className="flex-1 p-4 pb-32 lg:pb-10 max-w-2xl lg:max-w-7xl mx-auto w-full">
+                        {/* --- 點餐作業：平板橫式為左菜單右結帳 --- */}
+                        {activeTab === 'menu' && (
+                            <div className="lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+                                {/* 左側菜單區 */}
+                                <div className="lg:col-span-7 xl:col-span-8 space-y-8">
+                                    {/* 平板版分類橫向滑動列 */}
+                                    <div className="hidden lg:flex overflow-x-auto gap-2 pb-1 hide-scrollbar snap-x">
+                                        <button onClick={() => scrollToCategory('custom')} className="shrink-0 snap-start bg-white border border-[#E6D5C9] text-[#5C4B41] px-4 py-2 rounded-full text-sm font-bold flex items-center gap-1 shadow-sm">✨ 自選配料</button>
+                                        {menuData.map(cat => (
+                                            <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className={`shrink-0 snap-start px-4 py-2 rounded-full text-sm font-bold transition-colors shadow-sm ${activeCategory === cat.id ? 'bg-[#5C4B41] text-white' : 'bg-white border border-[#E6D5C9] text-[#5C4B41]'}`}>
+                                                {cat.name}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div id="cat-custom" className="scroll-mt-48 lg:scroll-mt-24">
+                                        <div className="flex justify-between items-end mb-3">
+                                            <h2 className="text-lg font-black text-[#5C4B41]">開放式自選</h2>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {CUSTOM_BASES.map(b => (
+                                                <button key={b.id} onClick={() => setCustomBaseModal(b)} className="bg-white border border-[#E6D5C9] rounded-2xl py-4 flex flex-col items-center gap-1 shadow-sm active:bg-[#f2e9e4]">
+                                                    <span className="font-bold text-[#5C4B41] text-lg">{b.name}</span>
+                                                    <span className="text-xs text-[#A68A7A]">選{b.minItems}-8樣 ${b.basePrice}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {menuData.map(category => (
+                                        <div key={category.id} id={`cat-${category.id}`} className="scroll-mt-48 lg:scroll-mt-24">
+                                            <div className="flex justify-between items-end mb-3">
+                                                <h2 className="text-lg font-black text-[#5C4B41]">{category.name}</h2>
+                                                <span className="text-xs font-bold text-[#A68A7A]">點擊加入或換料</span>
+                                            </div>
+                                            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E6D5C9] grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                {category.items.map(item => (
+                                                    <div key={item.id} className="border-2 border-[#A68A7A] rounded-2xl p-4 relative flex flex-col justify-between">
+                                                        <div>
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <h3 className="font-black text-lg text-[#5C4B41] pr-4 leading-tight">{item.name}</h3>
+                                                                <span className="font-black text-xl text-[#A68A7A]">${item.price}</span>
+                                                            </div>
+                                                            {item.defaultToppings?.length > 0 && (
+                                                                <p className="text-sm text-[#A68A7A] mb-4 font-bold">
+                                                                    配料：{item.defaultToppings.join('、')}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex justify-end mt-2">
+                                                            <button onClick={() => { setSwapModal(item); setSwapSelections([...(item.defaultToppings || [])]); }} className="bg-[#A68A7A] text-white px-5 py-2 rounded-xl text-sm font-bold active:scale-95 shadow-sm">
+                                                                按鈕換料 / 加入
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* 右側結帳區 (平板橫式自動固定在右邊) */}
+                                <div id="order-details" className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-20 bg-[#f7f0eb] rounded-3xl p-5 shadow-sm mt-8 lg:mt-0 border border-[#E6D5C9]">
+                                    <div className="flex justify-between items-center mb-5">
+                                        <h2 className="font-black text-lg text-[#5C4B41] flex items-center gap-2">
+                                            <i data-lucide="shopping-bag" className="w-5 h-5"></i> 本筆點餐明細
+                                        </h2>
+                                        <span className="bg-[#A68A7A] text-white px-3 py-1 rounded-full text-xs font-bold">{cart.length} 份</span>
+                                    </div>
+
+                                    <div className="bg-[#eaddd5] rounded-xl flex p-1 mb-4">
+                                        {['內用', '外帶'].map(type => (
+                                            <button key={type} onClick={() => setOrderType(type)} className={`flex-1 py-2.5 rounded-lg text-sm font-black transition-all ${orderType === type ? 'bg-[#A68A7A] text-white shadow' : 'text-[#8c7465]'}`}>{type}</button>
+                                        ))}
+                                    </div>
+
+                                    <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-[#E6D5C9]">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <span className="font-bold text-[#5C4B41] shrink-0">號碼機號碼</span>
+                                            <div className="flex-1 bg-[#fdf8f5] rounded-lg py-2 px-3 text-center font-black text-[#A68A7A] tracking-wider border border-[#E6D5C9]">
+                                                {pagerNum || '輸入或點選下方'}
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-6 gap-2">
+                                            {[1,2,3,4,5].map(n=><button key={n} onClick={()=>setPagerNum(prev=>prev+n)} className="bg-[#FDFBF7] border border-[#E6D5C9] text-[#5C4B41] py-2 rounded-lg font-black text-lg active:bg-gray-200">{n}</button>)}
+                                            <button onClick={()=>setPagerNum('')} className="bg-red-50 text-red-500 py-2 rounded-lg font-bold text-sm border border-red-100 active:bg-red-100">清除</button>
+                                            {[6,7,8,9,0].map(n=><button key={n} onClick={()=>setPagerNum(prev=>prev+n)} className="bg-[#FDFBF7] border border-[#E6D5C9] text-[#5C4B41] py-2 rounded-lg font-black text-lg active:bg-gray-200">{n}</button>)}
+                                            <button onClick={()=>setPagerNum(prev=>prev.slice(0,-1))} className="bg-[#fdf8f5] border border-[#E6D5C9] text-gray-600 py-2 rounded-lg font-bold flex justify-center items-center active:bg-gray-200"><i data-lucide="arrow-left" className="w-5 h-5"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white rounded-2xl p-4 mb-5 shadow-sm min-h-[120px] lg:max-h-[240px] lg:overflow-y-auto flex flex-col justify-center border border-[#E6D5C9]">
+                                        {cart.length === 0 ? (
+                                            <div className="text-center font-bold text-[#A68A7A]">
+                                                <div className="mb-1">尚未加入任何餐點</div>
+                                                <div className="text-xs text-gray-400">請從左側或上方點選自選料或套餐</div>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3 my-auto">
+                                                {cart.map((item, idx) => (
+                                                    <div key={item.id} className="flex justify-between items-start border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                                                        <div className="pr-4">
+                                                            <div className="font-black text-[#5C4B41]">{item.name}</div>
+                                                            {item.toppings?.length > 0 && <div className="text-xs text-gray-500 mt-1 font-bold">配料: {item.toppings.join('、')}</div>}
+                                                        </div>
+                                                        <div className="flex flex-col items-end gap-2 shrink-0">
+                                                            <div className="font-black text-[#A68A7A]">${item.price}</div>
+                                                            <button onClick={() => setCart(cart.filter((_, i) => i !== idx))} className="text-red-400 p-1 bg-red-50 rounded"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex justify-between items-center mb-4 px-2">
+                                        <span className="font-bold text-[#5C4B41]">訂單總金額</span>
+                                        <span className="text-3xl font-black text-[#5C4B41]">${cartTotal}</span>
+                                    </div>
+
+                                    <button onClick={submitOrder} className="w-full bg-[#5C4B41] text-white py-4 rounded-2xl font-black text-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-transform">
+                                        <i data-lucide="check"></i> 送出訂單
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- 歷史紀錄 --- */}
+                        {activeTab === 'history' && (
+                            <div className="space-y-4 max-w-3xl mx-auto">
+                                <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-[#E6D5C9]">
+                                    <h2 className="font-black text-lg text-[#5C4B41]">待製作訂單 ({uncompletedCount})</h2>
+                                    <button onClick={handleClearAllPending} disabled={uncompletedCount === 0} className="bg-red-50 text-red-500 px-4 py-2 rounded-xl text-sm font-bold active:bg-red-100 border border-red-100 disabled:opacity-40">一鍵清除</button>
+                                </div>
+                                {orders.filter(o => o.status === 'pending').map(order => (
+                                    <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm border-l-8 border-[#C16E59]">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <span className="text-xs bg-[#5C4B41] text-white px-2 py-1 rounded-md font-bold mb-1 inline-block">號碼機</span>
+                                                <div className="text-3xl font-black text-[#5C4B41]">{order.pagerNum}</div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="bg-[#E6D5C9] text-[#5C4B41] px-3 py-1 rounded-full text-sm font-bold">{order.orderType}</div>
+                                                <div className="text-xs text-gray-400 mt-1">{new Date(order.timestamp).toLocaleTimeString()}</div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 border-y border-dashed border-gray-200 py-3 my-3">
+                                            {order.items.map((item, idx) => (
+                                                <div key={idx}>
+                                                    <div className="flex justify-between font-bold text-[#5C4B41]"><span>{item.name}</span><span>${item.price}</span></div>
+                                                    {item.toppings?.length > 0 && <div className="text-sm text-gray-500 mt-1">配料：{item.toppings.join('、')}</div>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => updateOrderStatus(order.id, 'completed')} className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2"><i data-lucide="check"></i> 完成</button>
+                                            <button onClick={() => handleDeleteOrder(order)} className="flex-1 bg-red-50 text-red-600 py-3 rounded-xl font-bold flex justify-center items-center gap-2"><i data-lucide="trash-2"></i> 刪單扣帳</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {uncompletedCount === 0 && <div className="text-center py-10 font-bold text-gray-400">目前無待製作訂單</div>}
+                            </div>
+                        )}
+
+                        {/* --- 數量統計 --- */}
+                        {activeTab === 'stats' && (
+                            <div className="space-y-4 max-w-4xl mx-auto">
+                                <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-[#E6D5C9]">
+                                    <h2 className="font-black text-lg text-[#5C4B41]">今日數量統計</h2>
+                                    <button onClick={handleClearStats} className="bg-red-50 text-red-500 px-4 py-2 rounded-xl text-sm font-bold active:bg-red-100 border border-red-100">清除統計</button>
+                                </div>
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                    {[...PREMIUM_TOPPINGS, ...REGULAR_TOPPINGS].map(topping => {
+                                        const used = currentUsage[topping] || 0;
+                                        const limit = parseInt(inventoryLimits[topping]);
+                                        const hasLimit = !isNaN(limit) && limit > 0;
+                                        const remain = hasLimit ? (limit - used) : null;
+                                        const isLow = hasLimit && remain <= 5;
+                                        return (
+                                            <div key={topping} className={`bg-white rounded-2xl p-4 shadow-sm border-2 ${isLow ? 'border-red-400 bg-red-50' : 'border-[#E6D5C9]'}`}>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="font-bold text-[#5C4B41]">{topping}</span>
+                                                    <span className="text-xl font-black text-[#C16E59]">{used}</span>
+                                                </div>
+                                                <div className="flex items-center bg-[#fdf8f5] rounded-lg p-1 border border-[#E6D5C9]">
+                                                    <span className="text-xs text-[#A68A7A] px-1 shrink-0 font-bold">可用:</span>
+                                                    <input type="number" placeholder="不限" value={inventoryLimits[topping] || ''} onChange={(e) => saveSettings('limits', {...inventoryLimits, [topping]: e.target.value})} className="w-full bg-transparent text-sm text-right outline-none min-w-0 pr-1 font-bold text-[#5C4B41]" />
+                                                </div>
+                                                {isLow && <div className="text-xs text-red-500 font-bold mt-2 text-right bg-white py-1 rounded">剩 {remain} 份</div>}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- 菜單編輯 --- */}
+                        {activeTab === 'edit' && (
+                            <div className="space-y-6 max-w-3xl mx-auto">
+                                <button onClick={() => saveSettings('menu', [{ id: 'c'+Date.now(), name: '新分類', items: [] }, ...menuData])} className="w-full py-4 border-2 border-dashed border-[#A68A7A] rounded-2xl font-black text-[#A68A7A]">+ 新增分類</button>
+                                {menuData.map(category => (
+                                    <div key={category.id} className="bg-white rounded-2xl p-4 shadow-sm border border-[#E6D5C9]">
+                                        <div className="flex items-center mb-4 gap-2">
+                                            <input value={category.name} onChange={e => saveSettings('menu', menuData.map(c => c.id === category.id ? {...c, name: e.target.value} : c))} className="w-full min-w-0 flex-1 text-lg font-black text-[#5C4B41] border-b-2 border-transparent focus:border-[#E6D5C9] outline-none pb-1 transition-colors" />
+                                            <button onClick={() => { if(window.confirm('刪除此分類？')) saveSettings('menu', menuData.filter(c => c.id !== category.id)); }} className="shrink-0 text-red-400 p-2 bg-red-50 rounded-lg"><i data-lucide="trash-2" className="w-5 h-5"></i></button>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {category.items.map(item => (
+                                                <div key={item.id} className="bg-[#fdf8f5] p-3 rounded-xl border border-[#E6D5C9]">
+                                                    <div className="flex gap-2 items-center mb-2">
+                                                        <input value={item.name} onChange={e => saveSettings('menu', menuData.map(c => c.id === category.id ? {...c, items: c.items.map(i => i.id === item.id ? {...i, name: e.target.value} : i)} : c))} className="w-full min-w-0 flex-1 font-bold text-[#5C4B41] bg-transparent border-b border-[#E6D5C9] outline-none pb-1" />
+                                                        <button onClick={() => saveSettings('menu', menuData.map(c => c.id === category.id ? {...c, items: c.items.filter(i => i.id !== item.id)} : c))} className="shrink-0 text-red-400 p-1"><i data-lucide="x" className="w-4 h-4"></i></button>
+                                                    </div>
+                                                    <div className="flex gap-2 items-center mb-2">
+                                                        <span className="font-bold text-[#A68A7A]">$</span>
+                                                        <input type="number" value={item.price} onChange={e => saveSettings('menu', menuData.map(c => c.id === category.id ? {...c, items: c.items.map(i => i.id === item.id ? {...i, price: e.target.value === '' ? '' : Number(e.target.value)} : i)} : c))} className="w-20 min-w-0 bg-white border border-[#E6D5C9] rounded px-2 py-1 outline-none text-center font-bold text-[#C16E59]" />
+                                                    </div>
+                                                    <input placeholder="預設配料 (用逗號分隔)" value={item.defaultToppings ? item.defaultToppings.join(',') : ''} onChange={e => saveSettings('menu', menuData.map(c => c.id === category.id ? {...c, items: c.items.map(i => i.id === item.id ? {...i, defaultToppings: e.target.value.split(',').filter(x=>x.trim())} : i)} : c))} className="w-full min-w-0 bg-white border border-[#E6D5C9] rounded px-2 py-1 text-sm outline-none font-bold text-[#A68A7A]" />
+                                                </div>
+                                            ))}
+                                            <button onClick={() => saveSettings('menu', menuData.map(c => c.id === category.id ? {...c, items: [...c.items, { id: 'i'+Date.now(), name: '新餐點', price: 0, defaultToppings: [] }]} : c))} className="w-full py-3 bg-white border border-dashed border-[#E6D5C9] text-[#A68A7A] rounded-xl text-sm font-bold active:bg-gray-50">+ 新增餐點</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </main>
+
+                    {/* --- 配料視窗 --- */}
+                    {(customBaseModal || swapModal) && (
+                        <div className="fixed inset-0 bg-[#FDFBF7] z-50 flex flex-col overflow-y-auto">
+                            <div className="p-4 flex-1 max-w-4xl mx-auto w-full">
+                                {customBaseModal && (
+                                    <div className="grid grid-cols-3 gap-2 mb-4">
+                                        {CUSTOM_BASES.map(b => (
+                                            <div key={b.id} className={`rounded-xl py-3 px-1 flex flex-col items-center justify-center gap-1 border-2 transition-colors ${customBaseModal.id === b.id ? 'border-[#A68A7A] bg-[#f7f0eb]' : 'border-[#E6D5C9] bg-white'}`}>
+                                                <span className="font-bold text-[#5C4B41]">{b.name}</span>
+                                                <span className="text-[11px] text-[#A68A7A]">最少選 {b.minItems} 樣</span>
+                                                <span className="font-bold text-[#C16E59]">${b.basePrice}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                <div className="bg-[#f7f0eb] rounded-3xl p-5 mb-32 border border-[#E6D5C9]">
+                                    <div className="flex justify-between items-start mb-6 border-b border-[#E6D5C9] pb-4">
+                                        <div>
+                                            <h3 className="font-black text-xl text-[#5C4B41] mb-1">{customBaseModal ? '點選配料' : `換料: ${swapModal.name}`}</h3>
+                                            <p className="text-[#C16E59] text-sm font-bold">
+                                                已選 {(customBaseModal ? customSelections : swapSelections).length} 樣 
+                                                {customBaseModal && ` (${customBaseModal.name}最少需 ${customBaseModal.minItems} 樣)`}
+                                            </p>
+                                        </div>
+                                        <button onClick={() => customBaseModal ? setCustomSelections([]) : setSwapSelections([])} className="bg-white px-4 py-2 rounded-xl text-sm font-bold text-gray-500 shadow-sm border border-gray-100">清空重選</button>
+                                    </div>
+
+                                    {/* 口味選擇 */}
+                                    {customBaseModal && (
+                                        <div className="mb-6 bg-white p-3 rounded-2xl shadow-sm border border-[#E6D5C9]">
+                                            <h4 className="font-bold text-[#5C4B41] mb-3 text-sm flex items-center gap-1"><i data-lucide="droplet" className="w-4 h-4 text-blue-400"></i> 口味選擇 (基底)</h4>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {FLAVOR_OPTIONS.map(f => (
+                                                    <button key={f.label} onClick={() => setCustomFlavor(f)} className={`py-2 rounded-xl font-bold border-2 transition-colors ${customFlavor.label === f.label ? 'bg-[#fbebe3] border-[#C16E59] text-[#C16E59]' : 'bg-[#fdf8f5] border-transparent text-[#A68A7A]'}`}>
+                                                        {f.label} {f.price > 0 ? `(+$${f.price})` : ''}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 8個選料格 */}
+                                    <div className="grid grid-cols-4 gap-3 mb-8">
+                                        {Array.from({length: 8}).map((_, i) => {
+                                            const activeSelections = customBaseModal ? customSelections : swapSelections;
+                                            const sel = activeSelections[i];
+                                            const isBasic = customBaseModal && i < customBaseModal.minItems;
+                                            return (
+                                                <div key={i} onClick={() => {
+                                                    if(sel) {
+                                                        const newArr = [...activeSelections];
+                                                        newArr.splice(i, 1);
+                                                        customBaseModal ? setCustomSelections(newArr) : setSwapSelections(newArr);
+                                                    }
+                                                }} className={`relative flex flex-col items-center justify-center h-[4.5rem] rounded-2xl border-2 transition-all ${sel ? 'border-[#5C4B41] bg-white shadow-sm cursor-pointer' : 'border-dashed border-[#d8c8bd]'}`}>
+                                                    {sel ? (
+                                                        <>
+                                                            <span className="text-[15px] font-black text-[#5C4B41] whitespace-nowrap tracking-tighter px-1">{sel}</span>
+                                                            <button className="absolute -top-2 -right-2 w-5 h-5 bg-[#C16E59] text-white rounded-full flex items-center justify-center shadow"><i data-lucide="x" className="w-3 h-3"></i></button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="text-xs font-bold text-[#A68A7A]">欄位 {i+1}</span>
+                                                            {isBasic && <span className="text-[10px] text-[#A68A7A] font-bold">基本</span>}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+
+                                    {/* 加價與一般配料 */}
+                                    <h4 className="font-bold text-[#A68A7A] mb-3 text-sm">加價配料 (每樣 +$10)</h4>
+                                    <div className="flex flex-wrap gap-2 mb-6 bg-white p-3 rounded-2xl shadow-sm border border-[#E6D5C9]">
+                                        {PREMIUM_TOPPINGS.map(t => {
+                                            const activeSelections = customBaseModal ? customSelections : swapSelections;
+                                            const count = activeSelections.filter(x => x === t).length;
+                                            return (
+                                                <button key={t} onClick={() => {
+                                                    if(activeSelections.length < 8) {
+                                                        customBaseModal ? setCustomSelections([...customSelections, t]) : setSwapSelections([...swapSelections, t]);
+                                                    }
+                                                }} className="relative bg-[#fbebe3] border border-[#E6D5C9] px-4 py-2.5 rounded-full font-bold text-[#5C4B41] active:bg-[#f2d8c9]">
+                                                    {t} <span className="text-[#C16E59] text-xs">+$10</span>
+                                                    {count > 0 && <span className="absolute -top-1 -right-1 bg-[#C16E59] text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">{count}</span>}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+
+                                    <h4 className="font-bold text-[#A68A7A] mb-3 text-sm">一般配料 {customBaseModal ? `(基本 ${customBaseModal.minItems} 樣內免費，超出每樣 +$5)` : '(差額每樣 +$5)'}</h4>
+                                    <div className="flex flex-wrap gap-2 bg-white p-3 rounded-2xl shadow-sm border border-[#E6D5C9]">
+                                        {REGULAR_TOPPINGS.map(t => {
+                                            const activeSelections = customBaseModal ? customSelections : swapSelections;
+                                            const count = activeSelections.filter(x => x === t).length;
+                                            return (
+                                                <button key={t} onClick={() => {
+                                                    if(activeSelections.length < 8) {
+                                                        customBaseModal ? setCustomSelections([...customSelections, t]) : setSwapSelections([...swapSelections, t]);
+                                                    }
+                                                }} className="relative bg-[#fdf8f5] border border-[#E6D5C9] px-4 py-2.5 rounded-full font-bold text-[#5C4B41] active:bg-[#f2e9e4]">
+                                                    {t}
+                                                    {count > 0 && <span className="absolute -top-1 -right-1 bg-[#5C4B41] text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">{count}</span>}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 配料視窗底部送單列 */}
+                            <div className="fixed bottom-0 left-0 right-0 bg-[#5C4B41] pt-4 safe-padding-bottom px-4 flex justify-between items-center z-50 max-w-2xl mx-auto rounded-t-3xl shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)]">
+                                <button onClick={() => {setCustomBaseModal(null); setSwapModal(null);}} className="absolute -top-12 right-4 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600"><i data-lucide="x"></i></button>
+                                <div className="text-white">
+                                    <div className="text-xs text-gray-300">目前累計</div>
+                                    <div className="text-2xl font-black flex items-center gap-2">
+                                        <span className="bg-[#C16E59] text-sm px-2 py-0.5 rounded-md">{(customBaseModal ? customSelections : swapSelections).length} 項</span>
+                                        ${customBaseModal ? calculatePrice(customBaseModal.basePrice, customBaseModal.minItems, customSelections) + (Number(customFlavor.price) || 0) : calculatePrice(swapModal.price, (swapModal.defaultToppings || []).length, swapSelections)}
+                                    </div>
+                                </div>
+                                <button onClick={customBaseModal ? handleAddCustomToCart : handleAddSwapToCart} className="bg-[#FDFBF7] text-[#5C4B41] px-6 py-3 rounded-2xl font-black text-lg active:scale-95">
+                                    確認加入
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 主畫面浮動結帳列 (僅在手機直式顯示，平板橫式自動隱藏) */}
+                    {activeTab === 'menu' && (
+                        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#5C4B41] pt-4 safe-padding-bottom px-4 flex justify-between items-center z-30 max-w-2xl mx-auto rounded-t-3xl shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.15)]">
+                            <div className="text-white flex items-center gap-3">
+                                <div className="bg-[#A68A7A] w-12 h-12 flex flex-col justify-center items-center rounded-xl font-bold">
+                                    <span className="text-[10px] text-gray-200">項數</span>
+                                    <span className="text-xl leading-none">{cart.length}</span>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-gray-300">目前累計金額</div>
+                                    <div className="text-2xl font-black">${cartTotal}</div>
+                                </div>
+                            </div>
+                            <button onClick={scrollToCheckout} className="bg-[#FDFBF7] text-[#5C4B41] px-6 py-3 rounded-2xl font-black text-lg flex items-center gap-2 active:scale-95">
+                                前往結帳 <i data-lucide="arrow-down" className="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App/>);
+    </script>
+</body>
+</html>
